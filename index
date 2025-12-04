@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deteksi Objek Warna Real-Time dengan TensorFlow.js</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/cocossd.min.js"></script>
+    
+    <style>
+        body {
+            font-family: sans-serif;
+            text-align: center;
+            margin: 20px;
+            background-color: #f4f4f9;
+        }
+        #main-container {
+            position: relative;
+            margin: 0 auto;
+            width: fit-content;
+            border: 5px solid #3498db;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+        video, canvas {
+            display: block;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 10;
+        }
+        h1 {
+            color: #2c3e50;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🚀 Deteksi Objek Warna (TensorFlow.js)</h1>
+    <p>Aplikasi ini mendeteksi objek secara real-time. Kotak **MERAH** akan muncul di sekitar objek yang terdeteksi.</p>
+
+    <div id="main-container">
+        <video id="video-feed" autoplay playsinline muted></video>
+        <canvas id="detection-canvas"></canvas>
+    </div>
+
+    <p id="status">Memuat model deteksi objek, tunggu sebentar...</p>
+
+    <script>
+        const video = document.getElementById('video-feed');
+        const canvas = document.getElementById('detection-canvas');
+        const statusElement = document.getElementById('status');
+        const context = canvas.getContext('2d');
+        let model = undefined;
+
+        /**
+         * 1. Mulai Aliran Video (Kamera)
+         */
+        async function setupCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'environment' } 
+                });
+                video.srcObject = stream;
+                return new Promise((resolve) => {
+                    video.onloadeddata = () => {
+                        resolve(video);
+                    };
+                });
+            } catch (error) {
+                statusElement.innerText = '❌ Gagal mengakses kamera. Pastikan Anda mengizinkan akses kamera.';
+                console.error("Kesalahan akses kamera:", error);
+            }
+        }
+
+        /**
+         * 2. Muat Model dan Lakukan Prediksi
+         */
+        async function loadModelAndDetect() {
+            // Muat model COCO-SSD
+            model = await cocoSsd.load();
+            statusElement.innerText = '✅ Model berhasil dimuat. Deteksi dimulai!';
+            
+            // Set ukuran video dan canvas agar sesuai
+            const videoWidth = video.videoWidth;
+            const videoHeight = video.videoHeight;
+            video.width = videoWidth;
+            video.height = videoHeight;
+            canvas.width = videoWidth;
+            canvas.height = videoHeight;
+
+            detectFrame();
+        }
+
+        /**
+         * 3. Fungsi Deteksi Berulang
+         */
+        function detectFrame() {
+            model.detect(video).then(predictions => {
+                // Hapus hasil gambar sebelumnya
+                context.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Gambar kotak pembatas untuk setiap objek yang terdeteksi
+                predictions.forEach(prediction => {
+                    // Hanya deteksi objek dengan skor keyakinan tinggi
+                    if (prediction.score > 0.66) {
+                        const [x, y, width, height] = prediction.bbox;
+
+                        // **LOGIKA WARNA DAN KOTAK PEMBATAS**
+                        context.strokeStyle = 'red'; // Set warna kotak pembatas menjadi MERAH
+                        context.lineWidth = 4;
+                        context.strokeRect(x, y, width, height);
+
+                        // Gambar label
+                        context.fillStyle = 'red';
+                        context.font = '24px Arial';
+                        context.fillText(`${prediction.class} (${Math.round(prediction.score * 100)}%)`, x, y > 10 ? y - 5 : 10);
+                    }
+                });
+
+                // Panggil kembali fungsi deteksi pada bingkai berikutnya
+                requestAnimationFrame(detectFrame);
+            });
+        }
+
+        /**
+         * 4. Inisialisasi Aplikasi
+         */
+        async function init() {
+            const stream = await setupCamera();
+            if (stream) {
+                video.addEventListener('play', loadModelAndDetect);
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
